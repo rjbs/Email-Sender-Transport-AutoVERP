@@ -45,11 +45,13 @@ around send_email => sub {
 
   for my $to (@{ $env->{to} }) {
     my $delivery_id = $self->$delivery_id_G({
+      email    => $email,
       to       => $to,
       batch_id => $batch_id,
     });
 
     my $from = $self->$env_from_G({
+      email       => $email,
       to          => $to,
       batch_id    => $batch_id,
       delivery_id => $delivery_id,

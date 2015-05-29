@@ -36,7 +36,7 @@ around send_email => sub {
   my $delivery_id_G = $self->delivery_id_generator;
   my $env_from_G    = $self->env_from_generator;
 
-  my $batch_id = $self->$batch_id_G;
+  my $batch_id = $self->$batch_id_G({ email => $email });
 
   # For some reason, I worry about whether I should bother uniq-ing the list of
   # to addresses.  I'm not going to sweat it for now. -- rjbs, 2015-05-29

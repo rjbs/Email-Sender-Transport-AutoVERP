@@ -88,10 +88,20 @@ around send_email => sub {
     Email::Sender::Failure::Multi->throw({ failures => @failures });
   }
 
-  my $result_logger = $self->result_logger;
-  $self->$result_logger($batch_id, \@results);
+  my $logged = eval {
+    my $result_logger = $self->result_logger;
+    $self->$result_logger($batch_id, \@results);
+    1;
+  };
+
+  $self->handle_result_logging_failure($@, \@results) unless $logged;
 
   return Email::Sender::Success->new;
 };
+
+sub handle_result_logging_failure {
+  my ($self, $error, $results) = @_;
+  Carp::cluck("error logging results: $error");
+}
 
 1;

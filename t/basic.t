@@ -18,7 +18,7 @@ my $verp = Email::Sender::Transport::AutoVERP->new({
     @results = map {; {
       batch_id    => $batch_id,
       delivery_id => $_->{delivery_id},
-      env_to      => $_->{to},
+      env_to      => $_->{env}{to}[0],
       result      => $_->{result}->isa('Email::Sender::Success') ? 'success' : 'fail',
     } } @$results;
   },
@@ -43,6 +43,9 @@ is(@deliveries, 3, "we did three distinct deliveries");
 is(@results, 3, "...and we logged all three");
 
 my %bounce_addr = map {; $_->{envelope}{from} => 1 } @deliveries;
-is(keys %bounce_addr, 3, "...and each had a unique envelope sender");
+is(keys %bounce_addr, 3, "...and each had a unique envelope sender (as sent)");
+
+my %result_addr = map {; $_->{env_to} => 1 } @results;
+is(keys %result_addr, 3, "...and each had a unique envelope sender (in result)");
 
 done_testing;

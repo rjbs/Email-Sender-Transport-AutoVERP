@@ -123,8 +123,7 @@ This is a required callback that logs, somehow, the result of all attempted
 deliveries. It is called as a method on the AutoVERP transport, and is passed
 the batch id and then an arrayref of hashrefs, each of which contains:
 
-  to     - the address to which this delivery was to be made
-  from   - the enveloper sender that was used
+  env    - the envelope (hashref), as passed to the wrapped transport
   result - either an Email::Sender::Success or an Email::Sender::Failure
   delivery_id - the delivery id for the delivery
 
@@ -137,7 +136,8 @@ has result_logger => (
 );
 
 around send_email => sub {
-  my ($orig, $self, $email, $env) = @_;
+  my ($orig, $self, $email, $orig_env) = @_;
+  my $env = { %$orig_env };
 
   my $batch_id_G    = $self->batch_id_generator;
   my $delivery_id_G = $self->delivery_id_generator;
@@ -150,7 +150,9 @@ around send_email => sub {
   my @results;
   my @failures;
 
-  for my $to (@{ $env->{to} }) {
+  my $orig_to = delete $env->{to};
+
+  for my $to (@$orig_to) {
     my $delivery_id = $self->$delivery_id_G({
       email    => $email,
       to       => $to,
@@ -164,13 +166,13 @@ around send_email => sub {
       delivery_id => $delivery_id,
     });
 
-    my $result = eval {
-      $self->$orig($email, {
-        %$env,
-        from => $from,
-        to   => [ $to ],
-      });
+    my $env = {
+      %$env,
+      from => $from,
+      to   => [ $to ],
     };
+
+    my $result = eval { $self->$orig($email, $env); };
 
     unless ($result) {
       my $error  = $@;
@@ -184,14 +186,13 @@ around send_email => sub {
     }
 
     push @results, {
-      to     => $to,
-      from   => $from,
+      env    => $env,
       result => $result,
       delivery_id => $delivery_id,
     };
   }
 
-  if (@failures == @{ $env->{to} }) {
+  if (@failures == @$orig_to) {
     Email::Sender::Failure::Multi->throw({ failures => @failures });
   }
 

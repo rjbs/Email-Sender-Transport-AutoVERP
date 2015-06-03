@@ -204,8 +204,16 @@ around send_email => sub {
 
   $self->handle_result_logging_failure($@, \@results) unless $logged;
 
-  return Email::Sender::Success->new;
+  return Email::Sender::Success::HasBatchId->new({ batch_id => $batch_id });
 };
+
+{
+  package Email::Sender::Success::HasBatchId;
+  use Moo;
+  extends 'Email::Sender::Success';
+  has batch_id => (is => 'ro', required => 1);
+  no Moo;
+}
 
 =method handle_result_logging_failure
 

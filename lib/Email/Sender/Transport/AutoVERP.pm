@@ -18,15 +18,15 @@ use Data::GUID qw(guid_string);
       my $arg = $_[1];
       "$arg->{delivery_id}\@bounce.example.com",
     },
-    result_logger      => sub {
-      my ($self, $batch_id, $results) = @_;
+    delivery_logger    => sub {
+      my ($self, $batch_id, $deliveries) = @_;
 
       $db_receipts->insert(
         batch_id    => $batch_id,
         delivery_id => $_->{delivery_id},
         env_to      => $_->{to},
         result      => $_->{result}->isa('Email::Sender::Success') ? 'success' : 'fail',
-      ) for @$results;
+      ) for @$deliveries;
     },
   });
 
@@ -45,10 +45,10 @@ to log the results of sending.  (You want to log the results so you can later
 associate bounces with attempted deliveries.  Putting envelope senders or
 delivery ids into a database is one obvious strategy.)
 
-AutoVERP will not be the right solution for every case.  Among other things,
-it converts partial successes into total successes, on the theory that as long
-as one delivery is made, the rest can be considered successful because the
-result logger can log them.  Then, of course, the result logger might fail.
+AutoVERP will not be the right solution for every case.  Among other things, it
+converts partial successes into total successes, on the theory that as long as
+one delivery is made, the rest can be considered successful because the
+delivery logger can log them.  Then, of course, the delivery logger might fail.
 
 In other words, AutoVERP is less atomic in behavior than its underlying
 transport, and this can't be helped in almost any case.  If you need every
@@ -117,7 +117,7 @@ has env_from_generator => (
   required => 1,
 );
 
-=attr result_logger
+=attr delivery_logger
 
 This is a required callback that logs, somehow, the result of all attempted
 deliveries. It is called as a method on the AutoVERP transport, and is passed
@@ -129,9 +129,9 @@ the batch id and then an arrayref of hashrefs, each of which contains:
 
 =cut
 
-has result_logger => (
+has delivery_logger => (
   is  => 'ro',
-  isa => sub { "result_logger is not codelike" unless _CODELIKE($_[0]) },
+  isa => sub { "delivery_logger is not codelike" unless _CODELIKE($_[0]) },
   required => 1,
 );
 
@@ -147,7 +147,7 @@ around send_email => sub {
 
   # For some reason, I worry about whether I should bother uniq-ing the list of
   # to addresses.  I'm not going to sweat it for now. -- rjbs, 2015-05-29
-  my @results;
+  my @deliveries;
   my @failures;
 
   my $orig_to = delete $env->{to};
@@ -185,7 +185,7 @@ around send_email => sub {
       push @failures, $result;
     }
 
-    push @results, {
+    push @deliveries, {
       env    => $env,
       result => $result,
       delivery_id => $delivery_id,
@@ -197,27 +197,28 @@ around send_email => sub {
   }
 
   my $logged = eval {
-    my $result_logger = $self->result_logger;
-    $self->$result_logger($batch_id, \@results);
+    my $delivery_logger = $self->delivery_logger;
+    $self->$delivery_logger($batch_id, \@deliveries);
     1;
   };
 
-  $self->handle_result_logging_failure($@, \@results) unless $logged;
+  $self->handle_delivery_logging_failure($@, \@deliveries) unless $logged;
 
   return Email::Sender::Success::HasBatchId->new({ batch_id => $batch_id });
 };
 
 {
   package Email::Sender::Success::HasBatchId;
+
   use Moo;
   extends 'Email::Sender::Success';
   has batch_id => (is => 'ro', required => 1);
   no Moo;
 }
 
-=method handle_result_logging_failure
+=method handle_delivery_logging_failure
 
-  $verp->handle_result_logging_failure($error, \@results);
+  $verp->handle_delivery_logging_failure($error, \@deliveries);
 
 This method is called when the results can't be logged, and should perform some
 kind of sane fallback behavior.  The default behavior will issue a warning.
@@ -227,7 +228,7 @@ the transport from reporting success, even though the mail has been sent out.
 
 =cut
 
-sub handle_result_logging_failure {
+sub handle_delivery_logging_failure {
   my ($self, $error, $results) = @_;
   Carp::cluck("error logging results: $error");
 }

@@ -13,14 +13,14 @@ my $verp = Email::Sender::Transport::AutoVERP->new({
   transport => $test,
 
   env_from_generator => sub { my $arg = $_[1]; "$arg->{delivery_id}\@bounce.example.com" },
-  result_logger      => sub {
-    my ($self, $batch_id, $results) = @_;
+  delivery_logger      => sub {
+    my ($self, $batch_id, $deliveries) = @_;
     @results = map {; {
       batch_id    => $batch_id,
       delivery_id => $_->{delivery_id},
       env_to      => $_->{env}{to}[0],
       result      => $_->{result}->isa('Email::Sender::Success') ? 'success' : 'fail',
-    } } @$results;
+    } } @$deliveries;
   },
 });
 
